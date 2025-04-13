@@ -35,15 +35,11 @@ with open(args.config, 'r') as f:
 logging.info(f"Configuration loaded from {args.config}:")
 logging.info(f"max_seq_length: {config['max_seq_length']}")
 logging.info(f"lora_rank: {config['lora_rank']}")
-logging.info(f"alpha: {config['alpha']}")
-logging.info(f"max_z: {config['max_z']}")
 
 # Set caching and model parameters from config
 cache_dir = "./cache"  # Local cache directory
 max_seq_length = config['max_seq_length']
 lora_rank = config['lora_rank']
-alpha = config['alpha']
-Z = list(range(1, config['max_z'] + 1))
 
 # Configure to skip VLLM for offline use
 # The key is to bypass VLLM's auto-detection which tries to access HF Hub
@@ -97,51 +93,8 @@ model = FastLanguageModel.get_peft_model(
 print("Loading dataset from local cache...")
 with open("./dataset_cache/gsm8k_train.json", "r") as f:
     dataset_data = json.load(f)
-for item in dataset_data:
-    idx = random.choice(Z)
-    item['prompt'][1]['content'] = f"Strategy {idx} | " + item['prompt'][1]['content'] 
-   
+
 dataset = Dataset.from_list(dataset_data)
-
-def extract_strategy_idx(text):
-    # Find the position of "Strategy " and " | "
-    strategy_pos = text.find("Strategy ")
-    separator_pos = text.find(" | ")
-    
-    if strategy_pos == -1 or separator_pos == -1:
-        raise ValueError("Input text does not match expected format")
-    
-    # Extract the substring between "Strategy " and " | "
-    idx_start = strategy_pos + len("Strategy ")
-    idx_substring = text[idx_start:separator_pos]
-    
-    # Convert to integer
-    try:
-        idx = int(idx_substring.strip())
-        return idx
-    except ValueError:
-        raise ValueError(f"Could not convert '{idx_substring}' to an integer")
-    
-
-def replace_strategy_idx(text, new_idx=None):
-
-    # Extract the original index
-    original_idx = extract_strategy_idx(text)
-    
-    # If no replacement requested, just return the extracted index and original text
-    if new_idx is None:
-        return original_idx, text
-    
-    # Find the positions to replace
-    strategy_pos = text.find("Strategy ")
-    separator_pos = text.find(" | ")
-    
-    # Replace the index
-    prefix = text[:strategy_pos + len("Strategy ")]
-    suffix = text[separator_pos:]
-    modified_text = f"{prefix}{new_idx}{suffix}"
-    
-    return original_idx, modified_text
     
 # Helper functions for reward calculation
 def extract_xml_answer(text: str) -> str:
@@ -231,31 +184,6 @@ def get_log_probability(prompt, completion):
     
     return completion_log_prob
 
-#need the dataset to incldue the Group [1,.., len(Z)], then we need to compute log p(y|z) - log sum_z(p(y | z))
-def mi_reward(completions, prompts, answer, **kwargs):
-    
-    contents = [completion[0]['content'] for completion in completions]
-    questions = [prompt[1]['content'] for prompt in prompts]
-    
-    rewards = []
-    for i in range(len(contents)): #need to parallelize this, i.e. stack before get probs
-        idx = extract_strategy_idx(questions[i])
-        log_p_z = get_log_probability(questions[i], contents[i])
-        
-        log_values = []
-        for z in Z:
-            _, new_question = replace_strategy_idx(questions[i], z)
-            log_val = get_log_probability(new_question, contents[i]) - math.log(len(Z))
-            log_values.append(log_val)
-
-        M = max(log_values) #to avoid underflow
-        log_p = M + math.log(sum(math.exp(lv - M) for lv in log_values))
-        
-        reward = alpha * (log_p_z - log_p) 
-        rewards.append(reward)
-
-    return rewards
-
 # Configure training
 max_prompt_length = 256
 
@@ -302,7 +230,6 @@ trainer = GRPOTrainer(
         strict_format_reward_func,
         int_reward_func,
         correctness_reward_func,
-        mi_reward,
     ],
     args=training_args,
     train_dataset=dataset,
