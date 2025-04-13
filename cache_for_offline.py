@@ -50,7 +50,7 @@ def extract_hash_answer(text: str) -> str | None:
 
 # System prompt
 SYSTEM_PROMPT = """
-Respond in the following format:
+Respond in the following format, with only numbers between the answer tags:
 <reasoning>
 ...
 </reasoning>
