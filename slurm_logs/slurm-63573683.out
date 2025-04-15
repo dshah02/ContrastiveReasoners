@@ -1,0 +1,4 @@
+/home/kw6487/.conda/envs/contrastive_reasoners/lib/python3.10/site-packages/transformers/utils/hub.py:105: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:06<00:19,  6.50s/it]/var/spool/slurmd/job63573683/slurm_script: line 17: 2006899 Killed                  python critic4.py
+slurmstepd: error: Detected 1 oom_kill event in StepId=63573683.batch. Some of the step tasks have been OOM Killed.
