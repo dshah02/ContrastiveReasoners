@@ -95,12 +95,12 @@ def is_valid_state(prop_state, states):
     prop_state.sort()
     states = list_all_valid_states(states)
     for state in states:
-        if np.allclose(prop_state, state, atol=0.01, rtol=0):
+        if np.allclose(prop_state, state, atol=0.01, rtol=0) and len(prop_state) == len(state):
             return True
     return False
 
-prop_state = [1,7]
-states = [[1,2,3]]
+prop_state = [1,0.66,4]
+states = [[1,2,3,4]]
 print(is_valid_state(prop_state, states))
 
 # # Example 1: Starting state [1, 2, 3, 4]
