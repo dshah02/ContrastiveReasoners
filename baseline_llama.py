@@ -4,7 +4,7 @@ import re
 from trl import GRPOConfig, GRPOTrainer
 
 model_name = "meta-llama/meta-Llama-3.1-8B-Instruct"
-max_seq_length = 1024 # Can increase for longer reasoning traces
+max_seq_length = 2048 # Can increase for longer reasoning traces
 lora_rank = 32 # Larger rank = smarter, but slower
 
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -130,7 +130,7 @@ def xmlcount_reward_func(completions, **kwargs) -> list[float]:
     return [count_xml(c) for c in contents]
 
 
-max_prompt_length = 256
+max_prompt_length = 512
 
 import random
 # Save the trained model with unique ID

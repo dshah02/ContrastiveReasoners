@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Set caching and model parameters
 cache_dir = "./cache"  # Local cache directory
-max_seq_length = 1024
+max_seq_length = 2048
 lora_rank = 32
 
 # Configure to skip VLLM for offline use
@@ -34,7 +34,7 @@ try:
         prefer_vllm=False,    # Explicitly avoid VLLM which requires HF API calls
         tokenizer_path=cache_dir,  # Specify explicit tokenizer path
         max_lora_rank=lora_rank,
-        gpu_memory_utilization=0.6,
+        gpu_memory_utilization=0.8,
         local_files_only=True,
         trust_remote_code=True,  # Trust code from cache
         use_safetensors=True,    # Use safetensors when available
@@ -73,19 +73,19 @@ from strings import SYSTEM_PROMPT, XML_COT_FORMAT
 
 def get_questions():
     import json
-    with open('dataset.json', 'r') as f:
+    with open('random_target_games_10000.json', 'r') as f:
         data = json.load(f)
     
     processed_data = []
-    for item in data['dataset']:
+    for item in data:
         numbers_str = ', '.join(map(str, item['numbers']))
-        question = f"Given the numbers {numbers_str}, reach the target number {item['goal']} using +, -, *, and / operations."
+        question = f"Given the numbers {numbers_str}, reach the target number {item['target']} using +, -, *, and / operations."
         processed_data.append({
             'prompt': [
                 {'role': 'system', 'content': SYSTEM_PROMPT},
                 {'role': 'user', 'content': question}
             ],
-            'answer': item['solution']
+            'answer': item['target']
         })
     
     return processed_data
@@ -99,53 +99,28 @@ def extract_xml_answer(text: str) -> str:
     answer = answer.split("</answer>")[0]
     return answer.strip()
 
-# Reward functions
-def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[float]:
+from strings import evaluate_expression, is_valid_expression
+
+def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[float]: 
     responses = [completion[0]['content'] for completion in completions]
     q = prompts[0][-1]['content']
-    extracted_responses = [extract_xml_answer(r) for r in responses]
-    print('-'*20, f"Question:\n{q}", f"\nAnswer:\n{answer[0]}", f"\nResponse:\n{responses[0]}", f"\nExtracted:\n{extracted_responses[0]}")
-    return [2.0 if r == a else 0.0 for r, a in zip(extracted_responses, answer)]
-
-def int_reward_func(completions, **kwargs) -> list[float]:
+    resp = [extract_xml_answer(r) for r in responses]
+    user_messages = [p[1]['content'] for p in prompts]    
+    numbers_parts = [um.split("Given the numbers ")[1].split(", reach the target")[0] for um in user_messages]
+    numbers_list = [[int(num.strip()) for num in nm.split(",")] for nm in numbers_parts]
+    targets = [int(um.split("target number ")[1].split(" using")[0]) for um in user_messages]
+    
+    print('-'*20, f"Question:\n{q}", f"\nAnswer:\n{answer[0]}", f"\nResponse:\n{responses[0]}", f"\nExtracted:\n{resp[0]}")
+    return [2.0 if evaluate_expression(res, inp, ans) else 0 for res, inp, ans in zip(resp, numbers_list, targets)] 
+    
+def format_reward_func(completions, **kwargs) -> list[float]: 
     responses = [completion[0]['content'] for completion in completions]
-    extracted_responses = [extract_xml_answer(r) for r in responses]
-    return [0.5 if r.isdigit() else 0.0 for r in extracted_responses]
+    resp = [extract_xml_answer(r) for r in responses]
 
-def strict_format_reward_func(completions, **kwargs) -> list[float]:
-    """Reward function that checks if the completion has a specific format."""
-    pattern = r"^<reasoning>\n.*?\n</reasoning>\n<answer>\n.*?\n</answer>\n$"
-    responses = [completion[0]["content"] for completion in completions]
-    matches = [re.search(pattern, r, re.DOTALL) for r in responses]
-    return [0.5 if match else 0.0 for match in matches]
-
-def soft_format_reward_func(completions, **kwargs) -> list[float]:
-    """Reward function that checks if the completion has a specific format."""
-    pattern = r"<reasoning>.*?</reasoning>\s*<answer>.*?</answer>"
-    responses = [completion[0]["content"] for completion in completions]
-    matches = [re.search(pattern, r, re.DOTALL) for r in responses]
-    return [0.5 if match else 0.0 for match in matches]
-
-def count_xml(text) -> float:
-    count = 0.0
-    if text.count("<reasoning>\n") == 1:
-        count += 0.125
-    if text.count("\n</reasoning>\n") == 1:
-        count += 0.125
-    if text.count("\n<answer>\n") == 1:
-        count += 0.125
-        count -= len(text.split("\n</answer>\n")[-1])*0.001
-    if text.count("\n</answer>") == 1:
-        count += 0.125
-        count -= (len(text.split("\n</answer>")[-1]) - 1)*0.001
-    return count
-
-def xmlcount_reward_func(completions, **kwargs) -> list[float]:
-    contents = [completion[0]["content"] for completion in completions]
-    return [count_xml(c) for c in contents]
-
+    return [0.5 if is_valid_expression(res) else 0 for res in resp] 
+    
 # Configure training
-max_prompt_length = 256
+max_prompt_length = 400
 import random
 # Save the trained model with unique ID
 run_id = random.randint(1000, 9999)
@@ -161,14 +136,14 @@ training_args = GRPOConfig(
     logging_steps=1,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=1,
-    num_generations=6,
+    num_generations=6, #before was 6
     max_prompt_length=max_prompt_length,
     max_completion_length=max_seq_length - max_prompt_length,
     max_steps=250,
     save_steps=250,
     max_grad_norm=0.1,
     report_to="none",
-    output_dir=f"outputs_{run_id}",
+    output_dir=f"models/outputs_{run_id}",
     # Add these parameters to ensure offline mode
     hub_model_id=None,  # Disable Hugging Face Hub integration
     push_to_hub=False,  # Don't try to push to Hub
@@ -185,11 +160,12 @@ try:
         model=model,
         processing_class=tokenizer,
         reward_funcs=[
-            xmlcount_reward_func,
-            soft_format_reward_func,
-            strict_format_reward_func,
-            int_reward_func,
+            # xmlcount_reward_func,
+            # soft_format_reward_func,
+            # strict_format_reward_func,
+            # int_reward_func,
             correctness_reward_func,
+            format_reward_func
         ],
         args=training_args,
         train_dataset=dataset,
@@ -199,7 +175,7 @@ try:
     
     
     print(f"Saving trained model with ID {run_id}...")
-    trainer.model.save_pretrained(f"./outputs_{run_id}/final_model")
+    trainer.model.save_pretrained(f"./models/outputs_{run_id}/final_model")
     print("Training completed successfully!")
     
 except Exception as e:

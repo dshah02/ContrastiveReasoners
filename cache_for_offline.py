@@ -6,7 +6,7 @@ import json
 
 # Define model parameters
 model_name = "meta-llama/meta-Llama-3.1-8B-Instruct"
-max_seq_length = 1024    # Adjust for longer reasoning traces if needed
+max_seq_length = 2048    # Adjust for longer reasoning traces if needed
 lora_rank = 32           # Larger rank = smarter, but slower
 
 # Download the model and tokenizer from online
@@ -40,42 +40,3 @@ model.save_pretrained(cache_dir)
 tokenizer.save_pretrained(cache_dir)
 
 print("Model and tokenizer cached successfully in:", cache_dir)
-
-print("Downloading and saving the GSM8K dataset...")
-
-def extract_hash_answer(text: str) -> str | None:
-    if "####" not in text:
-        return None
-    return text.split("####")[1].strip()
-
-# System prompt
-SYSTEM_PROMPT = """
-Respond in the following format, with only numbers between the answer tags:
-<reasoning>
-...
-</reasoning>
-<answer>
-...
-</answer>
-"""
-
-# Download the dataset
-dataset = load_dataset('openai/gsm8k', 'main')
-
-# Process the dataset
-processed_train = []
-for item in dataset["train"]:
-    processed_item = {
-        'prompt': [
-            {'role': 'system', 'content': SYSTEM_PROMPT},
-            {'role': 'user', 'content': item['question']}
-        ],
-        'answer': extract_hash_answer(item['answer'])
-    }
-    processed_train.append(processed_item)
-
-# Save the processed dataset to JSON
-with open("./dataset_cache/gsm8k_train.json", "w") as f:
-    json.dump(processed_train, f)
-
-print("Preparation completed. You can now run the training code offline.")
