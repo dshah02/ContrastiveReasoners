@@ -32,11 +32,13 @@ logging.info(f"Configuration loaded from {args.config}:")
 logging.info(f"max_seq_length: {config['max_seq_length']}")
 logging.info(f"lora_rank: {config['lora_rank']}")
 logging.info(f"easy_dataset: {config['easy_dataset']}")
+logging.info(f"steps: {config['steps']}")
 
 
 max_seq_length = int(config['max_seq_length'])
 lora_rank = int(config['lora_rank'])
 use_easy_dataset = bool(config['easy_dataset'])
+steps = int(config['steps'])
 
 # Configure to skip VLLM for offline use
 # The key is to bypass VLLM's auto-detection which tries to access HF Hub
@@ -151,18 +153,23 @@ def format_reward_func(completions, **kwargs) -> list[float]:
     
 from verify_states import is_valid_state
 
-def validation_reward_func(completions, **kwargs):
+def validation_reward_func(prompts, completions, **kwargs):
+    user_messages = [p[1]['content'] for p in prompts]    
+    numbers_parts = [um.split("Given the numbers ")[1].split(", reach the target")[0] for um in user_messages]
+    numbers_list = [[int(num.strip()) for num in nm.split(",")] for nm in numbers_parts]
+
+
     responses = [completion[0]['content'] for completion in completions]
     state_list = [extract_states(res) for res in responses]
     print("STATE LIST", state_list)
     outputs = []
-    for sl in state_list:
+    for i, sl in enumerate(state_list):
         broke = False
-        if len(state_list) < 3: #less than 3 states means wrong almost surely
+        if len(sl) < 3: #less than 3 states means wrong almost surely
             outputs.append(-2)
         else:
-            for l in range(1, len(sl)-1):
-                if not is_valid_state(sl[l], sl[:l]):
+            for l in range(len(sl)-1):
+                if not is_valid_state(numbers_list[i] + sl[l], sl[:l]):
                     broke = True
             outputs.append([-1 if broke else 0])
     return outputs
@@ -187,8 +194,8 @@ training_args = GRPOConfig(
     num_generations=2, #before was 6
     max_prompt_length=max_prompt_length,
     max_completion_length=max_seq_length - max_prompt_length,
-    max_steps=250,
-    save_steps=250,
+    max_steps=steps,
+    save_steps=100,
     max_grad_norm=0.1,
     report_to="none",
     output_dir=f"models/outputs_{run_id}",

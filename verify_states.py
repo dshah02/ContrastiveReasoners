@@ -92,16 +92,19 @@ def list_all_valid_states(states): # this function should take in the current st
     return all_states
 
 def is_valid_state(prop_state, states):
+    print("PROP STATE", prop_state)
+    print("STATES", states)
     prop_state.sort()
     states = list_all_valid_states(states)
     for state in states:
-        if np.allclose(prop_state, state, atol=0.01, rtol=0) and len(prop_state) == len(state):
+        if len(prop_state) == len(state) and np.allclose(prop_state, state, atol=0.01, rtol=0):
             return True
     return False
 
-prop_state = [1,0.66,4]
-states = [[1,2,3,4]]
-print(is_valid_state(prop_state, states))
+if __name__ == "__main__":
+    prop_state = [1,0.66,4]
+    states = [[1,2,3,4]]
+    print(is_valid_state(prop_state, states))
 
 # # Example 1: Starting state [1, 2, 3, 4]
 # state1 = [1, 2, 3, 4]
