@@ -4,24 +4,6 @@ from typing import List, Union, Tuple
 # Define Number type for clarity, accommodating integers and potential floats from division
 Number = Union[int, float]
 
-def list_all_valid_states(states): # this function should take in the current states plus all past states to allow backtracking
-    """
-    List all valid states from a given list of states.
-
-    Args:
-        states: A list of states (each state is a list of numbers).
-
-    Returns:
-        A list of all valid states generated from the input states.
-    """
-    all_states = []
-    for state in states:
-        next_states = get_next_states(state)
-        all_states.extend(next_states)
-    return all_states
-
-states = [[1,2], [3,4]] 
-print(list_all_valid_states(states))
 
 def get_next_states(current_state: List[Number]) -> List[List[Number]]:
     """
@@ -90,6 +72,26 @@ def get_next_states(current_state: List[Number]) -> List[List[Number]]:
             next_states.append(new_state)
 
     return next_states
+
+
+def list_all_valid_states(states): # this function should take in the current states plus all past states to allow backtracking
+    """
+    List all valid states from a given list of states.
+
+    Args:
+        states: A list of states (each state is a list of numbers).
+
+    Returns:
+        A list of all valid states generated from the input states.
+    """
+    all_states = []
+    for state in states:
+        next_states = get_next_states(state)
+        all_states.extend(next_states)
+    return all_states
+
+states = [[1,2], [3,4]] 
+print(list_all_valid_states(states))
 
 
 
