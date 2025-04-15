@@ -12,14 +12,10 @@ class ContrastiveCritic(nn.Module):
             temperature: Scaling factor for the logits in the contrastive loss.
         """
         super(ContrastiveCritic, self).__init__()
-        # Load a shared tokenizer for both encoders
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-         # If this tokenizer has no pad token, set it to eos_token
         if not self.tokenizer.pad_token or self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        # Transformer encoder for the (state, action) pair
         self.action_encoder = AutoModel.from_pretrained(model_name)
-        # Transformer encoder for the goal
         self.goal_encoder = AutoModel.from_pretrained(model_name)
         self.temperature = temperature
 
@@ -34,18 +30,16 @@ class ContrastiveCritic(nn.Module):
         Returns:
             Tensor of shape (batch_size, hidden_dim) representing the embeddings.
         """
-        # Concatenate s and a for each sample; feel free to change the separator as needed.
         combined_texts = [s + " " + a for s, a in zip(s_texts, a_texts)]
         encoded = self.tokenizer(combined_texts, padding=True, truncation=True, return_tensors="pt")
-        # Move tokenized data to the same device as the model parameters
         encoded = {k: v.to(next(self.parameters()).device) for k, v in encoded.items()}
         outputs = self.action_encoder(**encoded)
         last_hidden_states = outputs.last_hidden_state  # (B, L, D)
-        # Determine the last non-padding token position for each sample
+
         attention_mask = encoded["attention_mask"]
         lengths = attention_mask.sum(dim=1) - 1  # (B,)
         batch_size = last_hidden_states.size(0)
-        # Using advanced indexing to select the embedding of the last token per sample
+
         final_embeddings = last_hidden_states[torch.arange(batch_size), lengths, :]
         return final_embeddings
 
@@ -60,9 +54,9 @@ class ContrastiveCritic(nn.Module):
         encoded = self.tokenizer(g_texts, padding=True, truncation=True, return_tensors="pt")
         encoded = {k: v.to(next(self.parameters()).device) for k, v in encoded.items()}
         outputs = self.goal_encoder(**encoded)
-        last_hidden_states = outputs.last_hidden_state  # (B, L, D)
+        last_hidden_states = outputs.last_hidden_state  
         attention_mask = encoded["attention_mask"]
-        lengths = attention_mask.sum(dim=1) - 1  # (B,)
+        lengths = attention_mask.sum(dim=1) - 1  
         batch_size = last_hidden_states.size(0)
         final_embeddings = last_hidden_states[torch.arange(batch_size), lengths, :]
         return final_embeddings
@@ -78,9 +72,8 @@ class ContrastiveCritic(nn.Module):
             Q: Tensor of shape (batch_size, batch_size), where entry Q[i, j] is 
                the dot-product between φ(s_texts[i], a_texts[i]) and Ψ(g_texts[j]).
         """
-        emb_action = self.encode_action(s_texts, a_texts)  # shape: (B, D)
-        emb_goal = self.encode_goal(g_texts)               # shape: (B, D)
-        # Compute pairwise dot product: (B, D) @ (D, B) -> (B, B)
+        emb_action = self.encode_action(s_texts, a_texts)  
+        emb_goal = self.encode_goal(g_texts)               
         Q = torch.matmul(emb_action, emb_goal.t())
         return Q
 
@@ -99,12 +92,9 @@ class ContrastiveCritic(nn.Module):
         """
         self.train()
         optimizer.zero_grad()
-        # Compute Q matrix: shape (N, N)
         Q = self.forward(s_texts, a_texts, g_texts)
         batch_size = Q.size(0)
-        # Correct targets: for each row, the matching goal is at the diagonal.
         targets = torch.arange(batch_size, device=Q.device)
-        # Scale logits by temperature and compute cross-entropy loss
         loss = F.cross_entropy(Q / self.temperature, targets)
         loss.backward()
         optimizer.step()
@@ -114,24 +104,21 @@ class ContrastiveCritic(nn.Module):
 if __name__ == "__main__":
     # Example usage of the ContrastiveCritic model.
 
-    # Create an instance of the contrastive critic and move it to the appropriate device.
     critic = ContrastiveCritic()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     critic.to(device)
 
-    # Dummy batch data: each list must have the same number of examples.
+    # Dummy batch data
     s_texts = ["state text 1", "state text 2", "state text 3"]
     a_texts = ["action text 1", "action text 2", "action text 3"]
     g_texts = ["goal text 1", "goal text 2", "goal text 3"]
 
-    # Define an optimizer (e.g., Adam) over the critic's parameters.
     optimizer = torch.optim.Adam(critic.parameters(), lr=1e-5)
 
-    # --- Forward Pass Example ---
     with torch.no_grad():
         Q_values = critic.forward(s_texts, a_texts, g_texts)
         print("Pairwise Q values:\n", Q_values)
 
-    # --- Training Step Example ---
+    #FOR DEVAN: EXAMPLE TRAINING STEP
     loss = critic.train_step(s_texts, a_texts, g_texts, optimizer)
     print("Training loss:", loss)
