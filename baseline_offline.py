@@ -6,19 +6,37 @@ from trl import GRPOConfig, GRPOTrainer
 import json
 import os
 import logging
+import yaml
+import argparse
 
 # Set environment variables for offline mode
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 
+parser = argparse.ArgumentParser(description='Run the experimental model with configuration')
+parser.add_argument('--config', type=str, default='config_0.yaml', help='Path to the configuration file')
+args = parser.parse_args()
+
 # Increase logging to debug issues
 logging.basicConfig(level=logging.INFO)
 
 # Set caching and model parameters
 cache_dir = "./cache"  # Local cache directory
-max_seq_length = 2048
-lora_rank = 32
+
+with open(args.config, 'r') as f:
+    config = yaml.safe_load(f)
+
+# Log configuration values
+logging.info(f"Configuration loaded from {args.config}:")
+logging.info(f"max_seq_length: {config['max_seq_length']}")
+logging.info(f"lora_rank: {config['lora_rank']}")
+logging.info(f"easy_dataset: {config['easy_dataset']}")
+
+
+max_seq_length = int(config['max_seq_length'])
+lora_rank = int(config['lora_rank'])
+use_easy_dataset = bool(config['easy_dataset'])
 
 # Configure to skip VLLM for offline use
 # The key is to bypass VLLM's auto-detection which tries to access HF Hub
@@ -69,20 +87,20 @@ model = FastLanguageModel.get_peft_model(
 )
 
 
-from strings import SYSTEM_PROMPT, XML_COT_FORMAT
+from strings import SYSTEM_PROMPT, XML_COT_FORMAT, MINI_SYS_PROMPT
 
 def get_questions():
     import json
-    with open('random_target_games_10000.json', 'r') as f:
+    with open('dataset_hard.json' if not use_easy_dataset else 'dataset_easy.json', 'r') as f:
         data = json.load(f)
     
     processed_data = []
     for item in data:
         numbers_str = ', '.join(map(str, item['numbers']))
-        question = f"Given the numbers {numbers_str}, reach the target number {item['target']} using +, -, *, and / operations."
+        question = f"Given the numbers {numbers_str}, reach the target number {item['target']} using +, -, *, and / operations and using each number once."
         processed_data.append({
             'prompt': [
-                {'role': 'system', 'content': SYSTEM_PROMPT},
+                {'role': 'system', 'content': MINI_SYS_PROMPT},
                 {'role': 'user', 'content': question}
             ],
             'answer': item['target']
@@ -95,11 +113,14 @@ dataset = Dataset.from_list(dataset)
 
 # Helper functions for reward calculation
 def extract_xml_answer(text: str) -> str:
+    if "<answer>" not in text:
+        return ""
     answer = text.split("<answer>")[-1]
     answer = answer.split("</answer>")[0]
     return answer.strip()
+    
 
-from strings import evaluate_expression, is_valid_expression
+from strings import evaluate_expression, is_valid_expression, extract_states
 
 def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[float]: 
     responses = [completion[0]['content'] for completion in completions]
@@ -111,13 +132,40 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
     targets = [int(um.split("target number ")[1].split(" using")[0]) for um in user_messages]
     
     print('-'*20, f"Question:\n{q}", f"\nAnswer:\n{answer[0]}", f"\nResponse:\n{responses[0]}", f"\nExtracted:\n{resp[0]}")
-    return [2.0 if evaluate_expression(res, inp, ans) else 0 for res, inp, ans in zip(resp, numbers_list, targets)] 
+    output =  [10.0 if evaluate_expression(res, inp, ans) else 0 for res, inp, ans in zip(resp, numbers_list, targets)] 
+    # Print successful cases where output is 10.0
+    for i, (out, res, inp) in enumerate(zip(output, resp, numbers_list)):
+        if out == 10.0:
+            print(f"Successful case {i}:")
+            print(f"Input numbers: {inp}")
+            print(f"Valid solution: {res}")
+    
+    return output
+
     
 def format_reward_func(completions, **kwargs) -> list[float]: 
     responses = [completion[0]['content'] for completion in completions]
     resp = [extract_xml_answer(r) for r in responses]
 
     return [0.5 if is_valid_expression(res) else 0 for res in resp] 
+    
+from verify_states import is_valid_state
+
+def validation_reward_func(completions, **kwargs):
+    responses = [completion[0]['content'] for completion in completions]
+    state_list = [extract_states(res) for res in responses]
+    print("STATE LIST", state_list)
+    outputs = []
+    for sl in state_list:
+        broke = False
+        if len(state_list) < 3: #less than 3 states means wrong almost surely
+            outputs.append(-2)
+        else:
+            for l in range(1, len(sl)-1):
+                if not is_valid_state(sl[l], sl[:l]):
+                    broke = True
+            outputs.append([-1 if broke else 0])
+    return outputs
     
 # Configure training
 max_prompt_length = 400
@@ -136,7 +184,7 @@ training_args = GRPOConfig(
     logging_steps=1,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=1,
-    num_generations=6, #before was 6
+    num_generations=2, #before was 6
     max_prompt_length=max_prompt_length,
     max_completion_length=max_seq_length - max_prompt_length,
     max_steps=250,
@@ -165,7 +213,8 @@ try:
             # strict_format_reward_func,
             # int_reward_func,
             correctness_reward_func,
-            format_reward_func
+            format_reward_func,
+            validation_reward_func
         ],
         args=training_args,
         train_dataset=dataset,

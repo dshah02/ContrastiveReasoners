@@ -19,6 +19,23 @@ Every state generated should be one step away from a prior state, and ensure eac
 </answer>
 """
 
+MINI_SYS_PROMPT = '''
+Game: Solve the 24 game with the given numbers.
+
+Rules:
+- Use each of the 4 numbers exactly once
+- Use only +, -, *, / operations
+- Show your step-by-step work
+- After each step, show remaining numbers in <state></state> tags
+- Put final expression in <answer></answer> tags using == format
+
+Example with numbers 3, 3, 5, 5 and target 30:
+1. 3 * 5 = 15 <state>15, 3, 5</state>
+2. 3 * 5 = 15 <state>15, 15</state>
+3. 15 + 15 = 30 <state>30</state>
+<answer>(3 * 5) + (3 * 5) == 30</answer>
+'''
+
 XML_COT_FORMAT = """
 <answer>
 {answer}
@@ -44,19 +61,38 @@ def extract_states(llm_response):
     # Process each state string into a list of integers
     states = []
     for state_str in state_matches:
-        # Split by commas, strip whitespace, and convert to integers
+        # Split by commas or spaces, strip whitespace, and convert to numbers
         numbers = []
-        for num_str in state_str.split(','):
-            # Clean and extract only numeric parts
+        # First split by commas if present
+        if ',' in state_str:
+            parts = state_str.split(',')
+        else:
+            # If no commas, split by spaces
+            parts = state_str.split()
+            
+        for num_str in parts:
+            # Clean and extract only numeric parts (including decimal points)
             cleaned = re.sub(r'[^\d.]', '', num_str.strip())
             if cleaned:
-                numbers.append(int(float(cleaned)))
+                try:
+                    # Use float to preserve decimal values
+                    num_val = float(cleaned)
+                    # Convert to int only if it's a whole number
+                    if num_val.is_integer():
+                        numbers.append(int(num_val))
+                    else:
+                        numbers.append(num_val)
+                except ValueError:
+                    # Skip invalid numbers
+                    pass
         states.append(numbers)
     
     return states
 
 
 def is_valid_expression(expr):
+    if expr == "":
+        return -1
     try: 
         result = eval(expr)
         return 1 if result else 0
