@@ -1,6 +1,6 @@
 import itertools
 from typing import List, Union, Tuple
-
+import numpy as np
 # Define Number type for clarity, accommodating integers and potential floats from division
 Number = Union[int, float]
 
@@ -69,6 +69,7 @@ def get_next_states(current_state: List[Number]) -> List[List[Number]]:
         # It contains the remaining numbers plus the result of the operation.
         for result in possible_results:
             new_state = remaining + [result]
+            new_state.sort()  # Sort to ensure consistent representation
             next_states.append(new_state)
 
     return next_states
@@ -90,10 +91,17 @@ def list_all_valid_states(states): # this function should take in the current st
         all_states.extend(next_states)
     return all_states
 
-states = [[1,2], [3,4]] 
-print(list_all_valid_states(states))
+def is_valid_state(prop_state, states):
+    prop_state.sort()
+    states = list_all_valid_states(states)
+    for state in states:
+        if np.allclose(prop_state, state, atol=0.01, rtol=0):
+            return True
+    return False
 
-
+prop_state = [1,7]
+states = [[1,2,3]]
+print(is_valid_state(prop_state, states))
 
 # # Example 1: Starting state [1, 2, 3, 4]
 # state1 = [1, 2, 3, 4]
