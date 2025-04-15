@@ -1,4 +1,3 @@
-
 from unsloth import FastLanguageModel
 import torch
 import re
@@ -34,19 +33,24 @@ model = FastLanguageModel.get_peft_model(
 
 # Load and prep dataset
 SYSTEM_PROMPT = """
-Respond in the following format:
-<reasoning>
-...
-</reasoning>
+We will be playing the game 24. In this game you will start with 4 numbers from 1 to 10 and aim to generate a target number.
+To generate the target number, you will combine the 4 starting numbers using +, -, *, and /. 
+Your reasoning may consist of many steps where you combine different numbers, after each combination, represent the current state between <state> and </state> tags.
+Put your answer in between <answer> and </answer> tags:
+
+For example, if the 4 numbers are 3, 3, 5, 5, and your target was 30, you would go about this with
+
+1. 3 * 5 = 15, so we can update state to <state> 15, 3, 5 </state>
+2. 15 * 5 = 75, so we can update state to <state> 75, 3 </state>
+3. This seems larger than our goal of 30, however we could combine with 5 with 3 to get <state> 15, 15 </state>
+4. Ah and 15 + 15 = 30, so we can reach <state> 30 </state>
+
 <answer>
-...
+(3 * 5) + (3 * 5) = 30
 </answer>
 """
 
-XML_COT_FORMAT = """\
-<reasoning>
-{reasoning}
-</reasoning>
+XML_COT_FORMAT = """
 <answer>
 {answer}
 </answer>
@@ -57,38 +61,40 @@ def extract_xml_answer(text: str) -> str:
     answer = answer.split("</answer>")[0]
     return answer.strip()
 
-def extract_hash_answer(text: str) -> str | None:
-    if "####" not in text:
-        return None
-    return text.split("####")[1].strip()
+def get_questions():
+    import json
+    with open('dataset.json', 'r') as f:
+        data = json.load(f)
+    
+    processed_data = []
+    for item in data['dataset']:
+        numbers_str = ', '.join(map(str, item['numbers']))
+        question = f"Given the numbers {numbers_str}, reach the target number {item['goal']} using +, -, *, and / operations."
+        processed_data.append({
+            'prompt': [
+                {'role': 'system', 'content': SYSTEM_PROMPT},
+                {'role': 'user', 'content': question}
+            ],
+            'answer': item['solution']
+        })
+    
+    return processed_data
 
+dataset = get_questions()
 
-# uncomment middle messages for 1-shot prompting
-def get_gsm8k_questions(split = "train") -> Dataset:
-    data = load_dataset('openai/gsm8k', 'main')[split] # type: ignore
-    data = data.map(lambda x: { # type: ignore
-        'prompt': [
-            {'role': 'system', 'content': SYSTEM_PROMPT},
-            {'role': 'user', 'content': x['question']}
-        ],
-        'answer': extract_hash_answer(x['answer'])
-    }) # type: ignore
-    return data # type: ignore
-
-dataset = get_gsm8k_questions()
-
-# Reward functions
 def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[float]:
     responses = [completion[0]['content'] for completion in completions]
     q = prompts[0][-1]['content']
     extracted_responses = [extract_xml_answer(r) for r in responses]
     print('-'*20, f"Question:\n{q}", f"\nAnswer:\n{answer[0]}", f"\nResponse:\n{responses[0]}", f"\nExtracted:\n{extracted_responses[0]}")
-    return [2.0 if r == a else 0.0 for r, a in zip(extracted_responses, answer)]
+    # For the 24 game, we'll consider the answer correct if it matches the solution
+    return [2.0 if r.strip() == a.strip() else 0.0 for r, a in zip(extracted_responses, answer)]
 
 def int_reward_func(completions, **kwargs) -> list[float]:
     responses = [completion[0]['content'] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
-    return [0.5 if r.isdigit() else 0.0 for r in extracted_responses]
+    # For the 24 game, we want to reward valid mathematical expressions
+    return [0.5 if any(op in r for op in ['+', '-', '*', '/']) else 0.0 for r in extracted_responses]
 
 def strict_format_reward_func(completions, **kwargs) -> list[float]:
     """Reward function that checks if the completion has a specific format."""

@@ -68,16 +68,30 @@ model = FastLanguageModel.get_peft_model(
     random_state=3407,
 )
 
-# Load dataset from local files
-print("Loading dataset from local cache...")
-try:
-    with open("./dataset_cache/gsm8k_train.json", "r") as f:
-        dataset_data = json.load(f)
-    # Convert to Hugging Face Dataset format
-    dataset = Dataset.from_list(dataset_data)
-except Exception as e:
-    print(f"Error loading dataset: {e}")
-    raise
+
+from strings import SYSTEM_PROMPT, XML_COT_FORMAT
+
+def get_questions():
+    import json
+    with open('dataset.json', 'r') as f:
+        data = json.load(f)
+    
+    processed_data = []
+    for item in data['dataset']:
+        numbers_str = ', '.join(map(str, item['numbers']))
+        question = f"Given the numbers {numbers_str}, reach the target number {item['goal']} using +, -, *, and / operations."
+        processed_data.append({
+            'prompt': [
+                {'role': 'system', 'content': SYSTEM_PROMPT},
+                {'role': 'user', 'content': question}
+            ],
+            'answer': item['solution']
+        })
+    
+    return processed_data
+
+dataset = get_questions()
+dataset = Dataset.from_list(dataset)
 
 # Helper functions for reward calculation
 def extract_xml_answer(text: str) -> str:
