@@ -85,7 +85,7 @@ def list_all_valid_states(states): # this function should take in the current st
     Returns:
         A list of all valid states generated from the input states.
     """
-    all_states = []
+    all_states = states
     for state in states:
         next_states = get_next_states(state)
         all_states.extend(next_states)
