@@ -74,6 +74,7 @@ def get_next_states(current_state: List[Number]) -> List[List[Number]]:
 
     return next_states
 
+import copy
 
 def list_all_valid_states(states): # this function should take in the current states plus all past states to allow backtracking
     """
@@ -85,15 +86,15 @@ def list_all_valid_states(states): # this function should take in the current st
     Returns:
         A list of all valid states generated from the input states.
     """
-    all_states = states
+    all_states = copy.deepcopy(states)
     for state in states:
         next_states = get_next_states(state)
         all_states.extend(next_states)
     return all_states
 
 def is_valid_state(prop_state, states):
-    print("PROP STATE", prop_state)
-    print("STATES", states)
+    # print("PROP STATE", prop_state)
+    # print("STATES", states)
     prop_state.sort()
     states = list_all_valid_states(states)
     for state in states:

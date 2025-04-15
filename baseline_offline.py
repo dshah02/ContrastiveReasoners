@@ -33,12 +33,14 @@ logging.info(f"max_seq_length: {config['max_seq_length']}")
 logging.info(f"lora_rank: {config['lora_rank']}")
 logging.info(f"easy_dataset: {config['easy_dataset']}")
 logging.info(f"steps: {config['steps']}")
+logging.info(f"state_format_loss: {config['state_format_loss']}")
 
 
 max_seq_length = int(config['max_seq_length'])
 lora_rank = int(config['lora_rank'])
 use_easy_dataset = bool(config['easy_dataset'])
 steps = int(config['steps'])
+state_format_loss = bool(config['state_format_loss'])
 
 # Configure to skip VLLM for offline use
 # The key is to bypass VLLM's auto-detection which tries to access HF Hub
@@ -161,17 +163,17 @@ def validation_reward_func(prompts, completions, **kwargs):
 
     responses = [completion[0]['content'] for completion in completions]
     state_list = [extract_states(res) for res in responses]
-    print("STATE LIST", state_list)
+    # print("STATE LIST", state_list) #list of states for each completion
     outputs = []
-    for i, sl in enumerate(state_list):
-        broke = False
+    for i, sl in enumerate(state_list): #sl is a single list fo states
+        broke = 0
         if len(sl) < 3: #less than 3 states means wrong almost surely
-            outputs.append(-2)
+            outputs.append(-2) #high loss
         else:
-            for l in range(len(sl)-1):
-                if not is_valid_state(numbers_list[i] + sl[l], sl[:l]):
-                    broke = True
-            outputs.append([-1 if broke else 0])
+            for l in range(len(sl)-1): #prefix of states and can we reach next state
+                if not is_valid_state(sl[l], [numbers_list[i]] + sl[:l]): #input looks like: [6], [[1, 2, 3], [3, 3]]
+                    broke -= 0.2
+            outputs.append(broke)
     return outputs
     
 # Configure training
@@ -215,14 +217,10 @@ try:
         model=model,
         processing_class=tokenizer,
         reward_funcs=[
-            # xmlcount_reward_func,
-            # soft_format_reward_func,
-            # strict_format_reward_func,
-            # int_reward_func,
             correctness_reward_func,
             format_reward_func,
             validation_reward_func
-        ],
+        ] if state_format_loss else [correctness_reward_func, format_reward_func],
         args=training_args,
         train_dataset=dataset,
     )

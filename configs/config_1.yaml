@@ -2,4 +2,4 @@ max_seq_length: 2048
 lora_rank: 32
 easy_dataset: False
 steps: 2000
-state_format_loss: True
+state_format_loss: False

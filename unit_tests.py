@@ -154,13 +154,14 @@ class TestGameFunctions(unittest.TestCase):
         # Test with one state
         states1 = [[1, 2, 3, 4]]
         all_states1 = list_all_valid_states(states1)
-        self.assertEqual(len(all_states1), 36)  # Same as get_next_states for this input
+        print(all_states1)
+        self.assertEqual(len(all_states1), 37)  # Same as get_next_states for this input
         
         # Test with multiple states
         states2 = [[1, 2, 3], [4, 5, 6]]
         all_states2 = list_all_valid_states(states2)
         # Each state should generate 18 next states (3 pairs * 6 operations)
-        self.assertEqual(len(all_states2), 36)  # 18 + 18
+        self.assertEqual(len(all_states2), 38)  # 18 + 18
         
         # Test with empty list
         states3 = []
@@ -170,7 +171,7 @@ class TestGameFunctions(unittest.TestCase):
         # Test with states that can't generate next states
         states4 = [[1], []]
         all_states4 = list_all_valid_states(states4)
-        self.assertEqual(all_states4, [])
+        self.assertEqual(all_states4, [[1], []])
 
     def test_is_valid_state(self):
         """Test the is_valid_state function"""
@@ -190,7 +191,7 @@ class TestGameFunctions(unittest.TestCase):
         self.assertTrue(is_valid_state([3], [[1, 2], [3, 4]]))  # Valid based on [1,2]
         
         # Test with edge cases
-        # self.assertFalse(is_valid_state([], [[1, 2, 3]]))       # Empty state not valid
+        self.assertFalse(is_valid_state([], [[1, 2, 3]]))       # Empty state not valid
         self.assertFalse(is_valid_state([1, 2, 3], [[1, 2]]))   # Can't generate more numbers
 
 
