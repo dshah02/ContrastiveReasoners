@@ -102,7 +102,6 @@ class ContrastiveCritic(nn.Module):
 
 
 if __name__ == "__main__":
-    # Example usage of the ContrastiveCritic model.
 
     critic = ContrastiveCritic()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
