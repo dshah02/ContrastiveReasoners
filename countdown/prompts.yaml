@@ -1,0 +1,57 @@
+USER_PROMPT: |-
+  [TASK]
+  You will be given four numbers and a target number, your task is to find a way to use all four numbers exactly once, along with the basic operations (+, -, *, /), to reach the target number.
+
+  [RULES]
+  - You can use each number exactly once.
+  - You can use the four basic operations (+, -, *, /).
+  - The intermediate results must be integers (no decimals allowed).
+  - The intermediate results must be positive.
+  - The intermediate results will not exceed 2000.
+
+  [APPROACH]
+  We will solve the problem by searching. Starting from a given set of four numbers, we will follow this search process:
+  - At each state, we will consider as many of the possible number pairs as we choose from the current number set. Choose one pair and apply one of the four basic operations to them to obtain a new number.
+    * If there are still numbers left, we will add the new number to the number set and continue the search.
+    * If we have used all numbers, we will check if the new number is equal to the target number. If it is, we have found the solution. Otherwise, we will backtrack.
+  - Suppose the two numbers we choose are a and b (where a >= b). We will try a subset of the four options (a + b), (a - b), (a * b), (a / b) to obtain the new number. Remember to always use the larger number as the first operand.
+  - If the new number is a decimal, or exceeds the maximum intermediate result, we will discard this branch and backtrack.
+  - At the end of each step, explicitly list the remaining numbers that are still available to use in subsequent steps, as shown in the examples.
+  - We will continue this process until we reach the target number with four numbers used or exhaust all possible combinations.
+  - Prioritize promising candidates first to make more likely you reach the goal early
+
+  [EXAMPLES]
+  <Search Procedure>
+  Initial number set: [21, 16, 17, 26], target: 46. Options for choosing two numbers: [(21, 16), (21, 17), (21, 26), (16, 17), (16, 26), (17, 26)].
+  |- Pick two numbers (21, 16) (numbers left: [17, 26]). Try possible operations. ### Current State: [21, 16, 17, 26]
+    |- Try 21 + 16 = 37. Add 37 to the number set. Current number set: [37, 17, 26], target: 46. Options for choosing two numbers: [(37, 17), (37, 26), (17, 26)]. ### Current State: [37, 17, 26]
+    |- Pick two numbers (37, 17) (numbers left: [26]). Try possible operations. ### Current State: [37, 17, 26]
+      |- Try 37 + 17 = 54. Add 54 to the number set. Current number set: [54, 26], target: 46, just two numbers left. ### Current State: [54, 26]
+      |- Try 54 + 26 = 80. Evaluate 80 != 46, drop this branch. ### Current State: [80]
+      |- Try 54 - 26 = 28. Evaluate 28 != 46, drop this branch. ### Current State: [28]
+      |- Try 54 * 26 = 1404. Evaluate 1404 != 46, drop this branch. ### Current State: [1404]
+      |- Try 54 / 26 = 2.1. 2.1 is a decimal, drop this branch. ### Current State: [2.1]
+      |- Try 37 - 17 = 20. Add 20 to the number set. Current number set: [20, 26], target: 46, just two numbers left. ### Current State: [20, 26]
+      |- Try 26 + 20 = 46. Evaluate 46 == 46, target found! ### Current State: [46]
+  </Search Procedure>
+
+  Now we have found the target, let's trace back the solution:
+  Final step: 26 + 20 = 46
+  The step before: 37 - 17 = 20
+  The first step: 21 + 16 = 37
+
+  Output the solution in the required format:
+  <Solution>
+  21 + 16 = 37
+  37 - 17 = 20
+  26 + 20 = 46
+  </Solution>
+
+  [Problem]
+  Now, solve the following problem. Note that:
+  - Please carefully read the approach and examples provided above, and follow them to solve the problem.
+  - Please ALWAYS include your search procedure (after # Search Procedure). The search procedure should follow the format of the examples provided above.
+  - Please mark your answer with <Solution> and </Solution> tags. The solution should be a sequence of three equations exactly following the format of the examples above, with no additional text in between.
+
+  Numbers: {nums}
+  Target: {target}
